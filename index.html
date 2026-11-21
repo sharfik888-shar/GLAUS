@@ -1,24 +1,123 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GLAUS</title>
-  <style>
-    body {
-      margin: 0;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0e1621;
-      color: #fff;
-      font-family: sans-serif;
-    }
-    h1 { font-size: 48px; letter-spacing: 6px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GLAUS</title>
+<link rel="icon" href="logo.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0e1621;--card:#17212b;--line:#243447;--accent:#3d9bff;--text:#fff;--muted:#8b9bb0;--err:#ff5d6c}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
+.screen{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px;flex-direction:column}
+.screen.active{display:flex}
+.logo{width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow:0 0 40px rgba(61,155,255,.5)}
+h1{letter-spacing:6px;margin:20px 0 4px}
+.sub{color:var(--muted);margin:0 0 24px}
+.box{width:100%;max-width:360px}
+.field{position:relative;margin-bottom:12px}
+.field svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+input{width:100%;padding:14px 14px 14px 44px;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--text);font-size:16px;outline:none}
+input:focus{border-color:var(--accent)}
+button{width:100%;padding:14px;border:0;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer}
+.main{background:var(--accent);color:#fff}
+.link{background:none;color:var(--accent);margin-top:8px}
+.msg{min-height:20px;color:var(--err);font-size:14px;text-align:center;margin:8px 0}
+</style>
 </head>
 <body>
+
+<!-- ЭКРАН ВХОДА -->
+<div class="screen" id="auth">
+  <img class="logo" src="logo.png" alt="GLAUS">
   <h1>GLAUS</h1>
+  <p class="sub">Общайся без границ</p>
+  <div class="box">
+    <div class="field">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+      <input id="email" type="email" placeholder="Почта">
+    </div>
+    <div class="field">
+      <svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <input id="password" type="password" placeholder="Пароль (от 6 символов)">
+    </div>
+    <div class="field" id="phoneField">
+      <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+      <input id="phone" type="tel" placeholder="Номер телефона (по желанию)">
+    </div>
+    <div class="msg" id="msg"></div>
+    <button class="main" id="submitBtn" onclick="submit()">Войти</button>
+    <button class="link" id="toggleBtn" onclick="setMode(!registerMode)"></button>
+  </div>
+</div>
+
+<!-- ЭКРАН ПРИЛОЖЕНИЯ (пока заглушка) -->
+<div class="screen" id="app">
+  <img class="logo" src="logo.png" alt="GLAUS">
+  <h1>Добро пожаловать</h1>
+  <p class="sub" id="who"></p>
+  <div class="box"><button class="main" onclick="logout()">Выйти</button></div>
+</div>
+
+<script>
+// 1. Подключение к Supabase
+const SUPABASE_URL = 'https://aqknooffniicmkaldeth.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Ge2f924X5ndbYxaeDYN6Kw_KMUeDBxZ';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 2. Помощники
+let registerMode = false;
+const $ = id => document.getElementById(id);
+function show(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function setMode(reg){
+  registerMode = reg;
+  $('phoneField').style.display = reg ? 'block' : 'none';
+  $('submitBtn').textContent = reg ? 'Создать аккаунт' : 'Войти';
+  $('toggleBtn').textContent = reg ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
+  $('msg').textContent = '';
+}
+
+// 3. Вход и регистрация
+async function submit(){
+  const email = $('email').value.trim();
+  const password = $('password').value;
+  $('msg').textContent = '';
+  if(!email || password.length < 6){
+    $('msg').textContent = 'Введите почту и пароль от 6 символов';
+    return;
+  }
+  let res;
+  if(registerMode){
+    res = await db.auth.signUp({ email, password });
+    if(!res.error && res.data.session){
+      const phone = $('phone').value.trim();
+      if(phone) await db.from('profiles').update({ phone }).eq('id', res.data.user.id);
+    }
+  } else {
+    res = await db.auth.signInWithPassword({ email, password });
+  }
+  if(res.error){ $('msg').textContent = res.error.message; return; }
+  enter();
+}
+
+// 4. Проверка: вошёл ли человек
+async function enter(){
+  const { data } = await db.auth.getSession();
+  if(!data.session){ show('auth'); return; }
+  $('who').textContent = data.session.user.email;
+  show('app');
+}
+async function logout(){
+  await db.auth.signOut();
+  show('auth');
+}
+
+setMode(false);
+enter();
+</script>
 </body>
 </html>
