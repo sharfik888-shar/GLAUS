@@ -45,6 +45,7 @@ h1{letter-spacing:6px;margin:16px 0 4px}
 .nav button{flex:1;padding:10px 0;color:var(--mu);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px}
 .nav button.on{color:var(--ac)}
 .ok{color:var(--ac);text-align:center;min-height:20px}
+.vf{display:inline-flex;vertical-align:middle;margin-left:5px}
 .head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--card)}
 .head>button{padding:4px;display:flex}
 #msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
@@ -142,6 +143,13 @@ const R = {
 };
 const ico = (k, s) => '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24">' + (R[k] || '') + '</svg>';
 
+// Синяя галочка официального аккаунта
+function badge(){
+  const s = el('span', 'vf');
+  s.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#3d9bff"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return s;
+}
+
 let ac;
 function beep(f){
   if (!sound) return;
@@ -193,8 +201,8 @@ async function submit(){
 async function enter(){
   const { data } = await db.auth.getSession();
   if (!data.session) { show('auth'); return; }
-  const { data: p } = await db.from('profiles').select('*').eq('id', data.session.user.id).single();
-  if (!p) { await db.auth.signOut(); show('auth'); return; }
+  const { data: p, error: pe } = await db.from('profiles').select('*').eq('id', data.session.user.id).single();
+  if (!p) { await db.auth.signOut(); show('auth'); showErr('Не удалось загрузить профиль: ' + (pe ? pe.message : 'нет данных')); return; }
   me = p;
   show('app'); tab('chats'); fillSettings();
 }
@@ -212,7 +220,9 @@ function tab(n){
 }
 function row(u, sub, fn){
   const r = el('div', 'row'), t = el('div', 'rt');
-  t.append(el('div', 'nm', u.display_name), el('div', 'ls', sub));
+  const n = el('div', 'nm', u.display_name);
+  if (u.verified) n.append(badge());
+  t.append(n, el('div', 'ls', sub));
   r.append(el('div', 'av', ini(u.display_name)), t);
   r.onclick = fn;
   return r;
@@ -240,7 +250,7 @@ async function loadContacts(){
   const list = $('contList');
   list.innerHTML = '';
   if (!data || !data.length) { list.append(el('div', 'empty', 'Никого не нашли. Попросите друга зарегистрироваться в GLAUS.')); return; }
-  data.forEach(u => list.append(row(u, '@' + u.username, () => startChat(u))));
+  data.forEach(u => list.append(row(u, u.bio || '@' + u.username, () => startChat(u))));
 }
 async function startChat(u){
   const a = me.id, b = u.id;
@@ -256,7 +266,8 @@ async function startChat(u){
 async function openChat(id, u){
   cur = id;
   $('chName').textContent = u.display_name;
-  $('chUser').textContent = '@' + u.username;
+  if (u.verified) $('chName').append(badge());
+  $('chUser').textContent = u.bio || '@' + u.username;
   $('msgs').innerHTML = '';
   show('chat');
   const { data } = await db.from('messages').select('*').eq('chat_id', id).order('created_at').limit(200);
@@ -325,6 +336,7 @@ $('txt').onkeydown = e => { if (e.key === 'Enter') send(); };
 function fillSettings(){
   $('setAv').textContent = ini(me.display_name);
   $('setName').textContent = me.display_name;
+  if (me.verified) $('setName').append(badge());
   $('setUser').textContent = '@' + me.username;
   $('setNick').value = me.display_name || '';
   $('sndBtn').textContent = sound ? 'Звуки: включены' : 'Звуки: выключены';
